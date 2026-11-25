@@ -191,18 +191,8 @@ body { font-size: 15px; }
 </style>
 </head>
 <body>
-<div class="gate" id="gate">
-<form id="pin-form" autocomplete="off">
-<h1>Fleet Maintenance</h1>
-<p>Enter the shop PIN to see and update the vehicle list.</p>
-<label for="pin" class="label" style="color:var(--sum-ink-2)">PIN</label>
-<input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="12" autocomplete="off" required>
-<button type="submit">Open the board</button>
-<p class="err" id="pin-err" aria-live="polite"></p>
-</form>
-</div>
-<div class="wrap" id="board" hidden>
-<div class="topbar"><h1>Fleet Maintenance</h1><button class="lock" id="lock" type="button">Lock</button></div>
+<div class="wrap" id="board">
+<div class="topbar"><h1>Fleet Maintenance</h1></div>
 <section class="block open" aria-labelledby="t-open">
 <div class="head">
 <h2 id="t-open">Vehicles with open items</h2>
@@ -293,7 +283,6 @@ if (!q.next) { q.busy = false; return; }
 var data = q.next; q.next = null; q.busy = true;
 rpc("fleet_save", { p_pin: pin, p_id: v.id, p_data: data }).then(function () { setStatus(OK_MSG, false); run(); }, function (err) {
 q.busy = false; q.next = null;
-if (err && err.badPin) { lockOut("The PIN changed. Enter the new one."); return; }
 setStatus("That change didn't save. Check your connection and try again.", true);
 });
 })();
@@ -489,8 +478,7 @@ setStatus(err && err.code === "revoked" ? "This list is no longer available here
 }
 var SB_URL = "https://xthpkelulxrogrvxcsdv.supabase.co";
 var SB_KEY = "sb_publishable_55soFe2SR6PDjPmkDQXYBg_yf8QVYIF";
-var PIN_KEY = "fleet-pin";
-var OK_MSG = "Shared list: everyone with the link and PIN sees changes within a few seconds.";
+var OK_MSG = "Shared list: everyone with the link sees changes within a few seconds.";
 var pin = "", poller = null, lastSig = "";
 function rpc(name, args) {
 return fetch(SB_URL + "/rest/v1/rpc/" + name, {
@@ -523,49 +511,19 @@ render();
 function poll() {
 if (document.hidden) return;
 load().then(function () { setStatus(OK_MSG, false); }, function (err) {
-if (err && err.badPin) { lockOut("The PIN changed. Enter the new one."); return; }
 setStatus("Can't reach the list right now. It will update when the connection is back.", true);
 });
 }
-function lockOut(msg) {
-clearInterval(poller); poller = null; pin = ""; mode = "loading";
-try { localStorage.removeItem(PIN_KEY); } catch (e) {}
-document.getElementById("board").hidden = true;
-document.getElementById("gate").hidden = false;
-document.getElementById("pin-err").textContent = msg || "";
-document.getElementById("pin").value = "";
-document.getElementById("pin").focus();
-}
-function open(p, fromSaved) {
-var err = document.getElementById("pin-err");
-err.textContent = fromSaved ? "" : "Checking\u2026";
-return rpc("fleet_check", { p_pin: p }).then(function (ok) {
-if (!ok) { lockOut(fromSaved ? "" : "That PIN didn't work. Try again."); return; }
-pin = p; mode = "shared";
-try { localStorage.setItem(PIN_KEY, p); } catch (e) {}
-document.getElementById("gate").hidden = true;
-document.getElementById("board").hidden = false;
-err.textContent = "";
-lastSig = "";
-return load().then(function () {
-setStatus(OK_MSG, false);
+function start() {
+mode = "shared"; lastSig = "";
+try { localStorage.removeItem("fleet-pin"); } catch (e) {}
 clearInterval(poller); poller = setInterval(poll, 5000);
-});
-}, function () {
-document.getElementById("gate").hidden = false;
-err.textContent = "Can't reach the list. Check your connection and try again.";
+return load().then(function () { setStatus(OK_MSG, false); }, function () {
+setStatus("Can't reach the list right now. It will update when the connection is back.", true);
 });
 }
-document.getElementById("pin-form").onsubmit = function (e) {
-e.preventDefault();
-var p = document.getElementById("pin").value.trim();
-if (p) open(p, false);
-};
-document.getElementById("lock").onclick = function () { lockOut(""); };
 document.addEventListener("visibilitychange", function () { if (!document.hidden && mode === "shared") poll(); });
-var saved = null;
-try { saved = localStorage.getItem(PIN_KEY); } catch (e) {}
-if (saved) open(saved, true); else document.getElementById("pin").focus();
+start();
 })();
 </script>
 </body>
